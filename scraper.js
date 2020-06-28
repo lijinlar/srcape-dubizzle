@@ -2,7 +2,8 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const xlsx = require("xlsx");
 const DubizzleDataScrapper = require('./DubizzleDataScrapper');
-var targetUrl = "https://dubai.dubizzle.com/classified/jewelry-watches/watches/mens-watches/?price__gte=5000&price__lte=&keywords=&is_basic_search_widget=1&is_search=1";
+// var targetUrl = "https://dubai.dubizzle.com/classified/jewelry-watches/watches/mens-watches/?price__gte=5000&price__lte=&keywords=&is_basic_search_widget=1&is_search=1";
+var targetUrl = "https://dubai.dubizzle.com/classified/mobile-phones-pdas/?site=2&s=CL&rc=852&c1=--&price__gte=&price__lte=&keywords=iphone+11&is_basic_search_widget=0&is_search=1&places__id__in=--&added__gte=3&age__lte=&condition__gte=4&usage__lte=&has_photos=1";
 var scrappedData;
 var leadsData;
 // Configuration for browser

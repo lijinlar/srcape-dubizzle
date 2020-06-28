@@ -1,4 +1,4 @@
-class DubizzleDataScrapper {
+class Chrono24DataScrapper {
     constructor(url, puppeteer, config) {
         this.url = url;
         this.puppeteer = puppeteer;
@@ -27,8 +27,8 @@ class DubizzleDataScrapper {
                 request.abort();
             }
             else if (this.domainsToExlcude.includes(new URL(request.url()).host)) {
-                console.log("Blocked: " + request.url())
-                request.abort()
+                console.log("Blocked: " + request.url());
+                request.abort();
             }
             else {
                 request.continue();
@@ -43,22 +43,23 @@ class DubizzleDataScrapper {
             try {
                 previousPage = currentPage;
                 var elements = await page.evaluate(() => {
-                    return Array.from(document.querySelectorAll(".cf.item")).map((elem) => {
+                    return Array.from(document.querySelectorAll(".article-item-container")).map((elem) => {
                         return {
-                            title: elem.querySelector(".listing-item .item-title .results-listing-title span a").innerHTML.trim(),
-                            link: elem.querySelector(".listing-item .item-title .results-listing-title span a").href,
-                            price: elem.querySelector(".listing-item .item-title .price").innerText.trim(),
+                            title: elem.querySelector(".article-title").innerHTML.trim(),
+                            link: (elem.querySelector("a") || {}).href,
+                            price: elem.querySelector(".article-price div strong").innerText.trim(),
+                            sellerType: elem.querySelector(".article-seller-name").innerText.trim()
                         };
                     });
                 });
                 classifiedPosts = [...classifiedPosts, ...elements];
-                await page.waitForSelector("#next_page");
+                await page.waitForSelector(".paging-next");
                 await page.evaluate(() => {
-                    document.querySelector("#next_page").click();
+                    document.querySelector(".paging-next").click();
                 });
-                await page.waitForSelector("span.page-links");
+                await page.waitForSelector("ul.pagination");
                 var currentPage = await page.evaluate(() => {
-                    return document.querySelector("span.page-links").innerText;
+                    return document.querySelector("ul.pagination li span.active").innerText;
                 });
                 currentPage = Number(currentPage);
             } catch (error) {
@@ -85,8 +86,8 @@ class DubizzleDataScrapper {
                 request.abort();
             }
             else if (this.domainsToExlcude.includes(new URL(request.url()).host)) {
-                console.log("Blocked: " + request.url())
-                request.abort()
+                console.log("Blocked: " + request.url());
+                request.abort();
             }
             else {
                 request.continue();
@@ -127,8 +128,8 @@ class DubizzleDataScrapper {
                     request.abort();
                 }
                 else if (this.domainsToExlcude.includes(new URL(request.url()).host)) {
-                    console.log("Blocked: " + request.url())
-                    request.abort()
+                    console.log("Blocked: " + request.url());
+                    request.abort();
                 }
                 else {
                     request.continue();
@@ -152,54 +153,53 @@ class DubizzleDataScrapper {
         return classifiedPosts;
     }
     async getFullDetails(links) {
-
+        // var links = [linksO[13]];
         var newLinkArray = [];
-        // for (var index in links) 
-        var index = 0;
-        {
+        for (var index in links) {
             const browser = await this.puppeteer.launch({
                 ...this.browserConfig,
                 ...{ userDataDir: this.users[this.getRandomInt(this.users.length)] }
             });
             var link = links[index];
+            if (link.sellerType != "Verified Dealer") {
+                continue;
+            }
             try {
                 const page = await browser.newPage();
-                // await page.setRequestInterception(true);
-                // page.on('request', request => {
-                //     if (['image', 'stylesheet', 'font'].indexOf(request.resourceType()) != -1) {
-                //         // request.abort();
-                //     }
-                //     else if (this.domainsToExlcude.includes(new URL(request.url()).host)) {
-                //         console.log("Blocked: " + request.url())
-                //         // request.abort()
-                //     }
-                //     else {
-                //         request.continue();
-                //     }
+                await page.setRequestInterception(true);
+                page.on('request', request => {
+                    if (['image', 'stylesheet', 'font'].indexOf(request.resourceType()) != -1) {
+                        request.abort();
+                    }
+                    else if (this.domainsToExlcude.includes(new URL(request.url()).host)) {
+                        console.log("Blocked: " + request.url());
+                        request.abort();
+                    }
+                    else {
+                        request.continue();
+                    }
 
-                // });
+                });
                 await page.goto(link.link);
                 link = await page.evaluate((link) => {
-                    link["Posted on"] = document.querySelector(".details-date__posted").innerText.trim().replace("Posted on: ", "");
-                    Array.from(document.querySelectorAll("#listing-details-list ul li")).map((elem) => {
-                        link[elem.querySelector("li span strong").innerHTML.trim()] = elem.querySelector("li span:nth-child(2)").innerText.trim();
+                    link["sellerName"] = document.querySelector(".merchant-logo+div strong").innerText.trim();
+                    link["sellerAddress"] = document.querySelector(".merchant-logo+div").innerText.trim();
+                    var contactCount = 1;
+                    link["rating"] = Array.from(document.querySelectorAll('.wt-rating-stats .rating [style="width: auto;"]')).length;
+                    link["ratingCount"] = document.querySelector(".wt-rating-stats a").innerText.trim();
+                    Array.from(document.querySelectorAll(".jq-contact-numbers span")).map((contact) => {
+                        link["contact_" + contactCount] = contact.innerText.trim();
+                        contactCount++;
                     });
-                    document.querySelector("a.phone-number.awesome.medium.lite-blue.logged-out-call-btn").click();
-                    return link;
-                }, link);
-                await page.waitForSelector("a.phone-number-btn:not(:empty)");
-                link = await page.evaluate(async (link) => {
-                    link["seller"] = document.querySelector(".seller-name").innerHTML.trim();
-                    link["phone"] = document.querySelector(".phone-number-btn").innerHTML.trim();
                     return link;
                 }, link);
                 newLinkArray.push(link);
-                // await page.close();
+                await page.close();
                 console.log("Success:" + index);
             } catch (error) {
                 console.log("Loop Error:" + index + error.message);
             }
-            // await browser.close();
+            await browser.close();
         }
 
         return newLinkArray;
@@ -208,4 +208,4 @@ class DubizzleDataScrapper {
         return Math.floor(Math.random() * Math.floor(max));
     }
 }
-module.exports = DubizzleDataScrapper;
+module.exports = Chrono24DataScrapper;
