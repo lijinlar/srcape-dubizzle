@@ -202,7 +202,7 @@ class DubizzleDataScrapper {
                         link.detailsOpened = false;
                         link.blocked = false;
                         return link;
-                    } else if (document.body.innerHTML.indexOf("Unable To Identify Your Browser" != -1)) {
+                    } else if (document.body.innerHTML.indexOf("You reached this page when attempting to access" != -1)) {
                         alert("sorry..!");
                         link.detailsOpened = false;
                         link.blocked = true;
