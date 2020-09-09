@@ -6,8 +6,8 @@ class DubizzleDataScrapper {
         this.puppeteer = puppeteer;
         this.browserConfig = config;
         this.users = [
-            "./users/hayik",
-            // "./users/yopa"
+            // "./users/hayik",
+            "./users/yopa"
             // "./users/rolbin"
         ];
         this.domainsToExlcude = [
@@ -176,7 +176,7 @@ class DubizzleDataScrapper {
         });
         const page = await browser.newPage();
         for (var index = this.statusData.failedAfter + 1; index <= links.length; index++)
-        // var index = this.statusData.failedAt;
+        // var index = this.statusData.failedAfter;
         {
             var link = links[index];
             try {
@@ -202,8 +202,9 @@ class DubizzleDataScrapper {
                         link.detailsOpened = false;
                         link.blocked = false;
                         return link;
-                    } else if (document.body.innerHTML.indexOf("You reached this page when attempting to access" != -1)) {
-                        alert("sorry..!");
+                    } else if (document.querySelector(".block-page")) {
+                        // console.log(document.querySelector("body").innerText);
+                        // alert(document.querySelector("body").innerText);
                         link.detailsOpened = false;
                         link.blocked = true;
                         return link;
