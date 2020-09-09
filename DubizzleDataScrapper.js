@@ -1,3 +1,5 @@
+const fs = require('fs');
+const rimraf = require("rimraf");
 class DubizzleDataScrapper {
     constructor(url, puppeteer, config) {
         this.url = url;
@@ -5,7 +7,7 @@ class DubizzleDataScrapper {
         this.browserConfig = config;
         this.users = [
             "./users/hayik",
-            "./users/yopa"
+            // "./users/yopa"
             // "./users/rolbin"
         ];
         this.domainsToExlcude = [
@@ -13,6 +15,14 @@ class DubizzleDataScrapper {
             "www.google.com",
             "sslwidget.criteo.com"
         ];
+        try {
+            this.statusData = require(`./tmp/status.json`);
+        }
+        catch (err) {
+            this.statusData = { failedAfter: -1 };
+            fs.mkdir(`./tmp`, { recursive: true }, (err) => {
+            });
+        }
     }
 
     async openAllPages() {
@@ -27,8 +37,8 @@ class DubizzleDataScrapper {
                 request.abort();
             }
             else if (this.domainsToExlcude.includes(new URL(request.url()).host)) {
-                console.log("Blocked: " + request.url())
-                request.abort()
+                console.log("Blocked: " + request.url());
+                request.abort();
             }
             else {
                 request.continue();
@@ -85,8 +95,8 @@ class DubizzleDataScrapper {
                 request.abort();
             }
             else if (this.domainsToExlcude.includes(new URL(request.url()).host)) {
-                console.log("Blocked: " + request.url())
-                request.abort()
+                console.log("Blocked: " + request.url());
+                request.abort();
             }
             else {
                 request.continue();
@@ -127,8 +137,8 @@ class DubizzleDataScrapper {
                     request.abort();
                 }
                 else if (this.domainsToExlcude.includes(new URL(request.url()).host)) {
-                    console.log("Blocked: " + request.url())
-                    request.abort()
+                    console.log("Blocked: " + request.url());
+                    request.abort();
                 }
                 else {
                     request.continue();
@@ -152,26 +162,32 @@ class DubizzleDataScrapper {
         return classifiedPosts;
     }
     async getFullDetails(links) {
-
-        var newLinkArray = [];
-        // for (var index in links) 
-        var index = 0;
+        var userDataDir = this.users[this.getRandomInt(this.users.length)];
+        var newLinkArray;
+        try {
+            var tmpLinks = require('./tmp/leads.json');
+            newLinkArray = tmpLinks;
+        } catch{
+            newLinkArray = [];
+        }
+        const browser = await this.puppeteer.launch({
+            ...this.browserConfig,
+            ...{ userDataDir }
+        });
+        const page = await browser.newPage();
+        for (var index = this.statusData.failedAfter + 1; index <= links.length; index++)
+        // var index = this.statusData.failedAt;
         {
-            const browser = await this.puppeteer.launch({
-                ...this.browserConfig,
-                ...{ userDataDir: this.users[this.getRandomInt(this.users.length)] }
-            });
             var link = links[index];
             try {
-                const page = await browser.newPage();
                 // await page.setRequestInterception(true);
                 // page.on('request', request => {
                 //     if (['image', 'stylesheet', 'font'].indexOf(request.resourceType()) != -1) {
-                //         // request.abort();
+                //         request.abort();
                 //     }
                 //     else if (this.domainsToExlcude.includes(new URL(request.url()).host)) {
                 //         console.log("Blocked: " + request.url())
-                //         // request.abort()
+                //         request.abort()
                 //     }
                 //     else {
                 //         request.continue();
@@ -180,24 +196,52 @@ class DubizzleDataScrapper {
                 // });
                 await page.goto(link.link);
                 link = await page.evaluate((link) => {
-                    link["Posted on"] = document.querySelector(".details-date__posted").innerText.trim().replace("Posted on: ", "");
-                    Array.from(document.querySelectorAll("#listing-details-list ul li")).map((elem) => {
-                        link[elem.querySelector("li span strong").innerHTML.trim()] = elem.querySelector("li span:nth-child(2)").innerText.trim();
-                    });
-                    document.querySelector("a.phone-number.awesome.medium.lite-blue.logged-out-call-btn").click();
-                    return link;
+                    // Something makes us think you’re a bot.
+                    if (document.querySelector(".captcha-form")) {
+                        alert("sorry..!");
+                        link.detailsOpened = false;
+                        link.blocked = false;
+                        return link;
+                    } else if (document.body.innerHTML.indexOf("Unable To Identify Your Browser" != -1)) {
+                        alert("sorry..!");
+                        link.detailsOpened = false;
+                        link.blocked = true;
+                        return link;
+                    } else {
+                        link["Posted on"] = document.querySelector(".details-date__posted").innerText.trim().replace("Posted on: ", "");
+                        Array.from(document.querySelectorAll("#listing-details-list ul li")).map((elem) => {
+                            link[elem.querySelector("li span").innerHTML.trim()] = elem.querySelector("li strong").innerText.trim();
+                        });
+                        // document.querySelector("a.phone-number.awesome.medium.lite-blue.logged-out-call-btn").click();phone-lead
+                        document.querySelector("#phone-lead").click();
+                        link.detailsOpened = true;
+                        return link;
+                    }
                 }, link);
-                await page.waitForSelector("a.phone-number-btn:not(:empty)");
-                link = await page.evaluate(async (link) => {
-                    link["seller"] = document.querySelector(".seller-name").innerHTML.trim();
-                    link["phone"] = document.querySelector(".phone-number-btn").innerHTML.trim();
-                    return link;
-                }, link);
-                newLinkArray.push(link);
-                // await page.close();
-                console.log("Success:" + index);
+                if (link.detailsOpened) {
+                    await page.waitForSelector("a.phone-number-btn:not(:empty)");
+                    link = await page.evaluate(async (link) => {
+                        link["seller"] = document.querySelector(".seller-name").innerHTML.trim();
+                        link["phone"] = document.querySelector(".phone-number-btn").innerHTML.trim();
+                        return link;
+                    }, link);
+                    newLinkArray.push(link);
+                    fs.writeFileSync(`./tmp/leads.json`, JSON.stringify(newLinkArray));
+                    // await page.close();
+                    console.log("Success:" + index);
+                    this.statusData.failedAfter = index;
+                    fs.writeFileSync(`./tmp/status.json`, JSON.stringify(this.statusData));
+                } else {
+                    if (link.blocked) {
+                        var newPage = await browser.newPage();
+                        await newPage.goto("chrome://settings/");
+                    }
+                    break;
+                }
             } catch (error) {
                 console.log("Loop Error:" + index + error.message);
+                // this.statusData.failedAt = index;
+                // fs.writeFileSync(`./tmp/status.json`, JSON.stringify(this.statusData));
             }
             // await browser.close();
         }

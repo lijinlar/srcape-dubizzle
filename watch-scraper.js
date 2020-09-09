@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const xlsx = require("xlsx");
 const DubizzleDataScrapper = require('./DubizzleDataScrapper');
-const { Client } = require('pg')
+const { Client } = require('pg');
 const client = new Client({
   user: 'scrapper',
   host: 'localhost',
@@ -14,7 +14,8 @@ const client = new Client({
 // Configuration for browser
 var config = {
   headless: false,
-  userDataDir: './users/yopa',
+  // userDataDir: './users/yopa', 
+  userDataDir: "./users/hayik",
   args: ['--no-sandbox']
 };
 // For saving file with suffix
@@ -23,7 +24,7 @@ var dateString = today.getFullYear() + "-" + (today.getMonth() + 1) + "-" + toda
 var category = "watches";
 // ========================= watch data scrapping ==========================================
 async function scrapeData() {
-  var targetUrl = "https://uae.dubizzle.com/classified/jewelry-watches/watches/?site=--&s=CL&rc=804&c1=805&c2=--&price__gte=5000&price__lte=&keywords=&is_basic_search_widget=0&is_search=1&added__gte=&age__lte=&condition__gte=&usage__lte=";
+  var targetUrl = "https://dubai.dubizzle.com/classified/jewelry-watches/watches/?site=2&s=CL&rc=804&c1=805&c2=--&price__gte=3000&price__lte=&keywords=&is_basic_search_widget=0&is_search=1&places=&places__id__in=&added__gte=3&age__lte=&condition__gte=&usage__lte=";
   var scrappedData;
   var leadsData;
   try {
@@ -35,7 +36,7 @@ async function scrapeData() {
     });
   }
   try {
-    leadsData = require(`./${category}/${dateString}/leads-${dateString}.json`);
+    // leadsData = require(`./${category}/${dateString}/leads-${dateString}.json`);
   }
   catch (err) {
     console.log("Error: " + err.message);
@@ -45,12 +46,16 @@ async function scrapeData() {
     // var links = await dubizzleScrapper.getPageLinks();
     // console.log(links);
     // var listOfPosts = await dubizzleScrapper.getListOfPosts(links);
+    var statusData = {
+      failedAfter: -1
+    };
+    fs.writeFileSync(`./tmp/status.json`, JSON.stringify(statusData));
     var listOfPosts = await dubizzleScrapper.openAllPages();
     console.log(listOfPosts.length);
     fs.writeFileSync(`./${category}/${dateString}/result-${dateString}.json`, JSON.stringify(listOfPosts));
     var detailsOfClassifieds = await dubizzleScrapper.getFullDetails(listOfPosts);
     fs.writeFileSync(`./${category}/${dateString}/leads-${dateString}.json`, JSON.stringify(detailsOfClassifieds));
-    generateExcel(leadsData);
+    generateExcel(detailsOfClassifieds);
   } else if (!leadsData) {
     console.log(`Already scrapped list (${scrappedData.length})`);
     var detailsOfClassifieds = await dubizzleScrapper.getFullDetails(scrappedData);
@@ -83,7 +88,7 @@ function generateExcel(leadsData) {
 async function insertToDb(dateString) {
   try {
     var allData = require(`./watch/${dateString}/leads-${dateString}.json`);
-    await client.connect()
+    await client.connect();
     allData.forEach((data) => {
       try {
         var insertQuery = `INSERT INTO 
@@ -109,11 +114,32 @@ async function insertToDb(dateString) {
   // grant all privileges on table leads to scrapper;
   // grant all privileges on sequence leads_id_seq to scrapper;
 }
+async function listFailed(dateStringIn) {
+  var scrappedData = require(`./${category}/${dateStringIn}/result-${dateStringIn}.json`);
+  var leadsData = require(`./${category}/${dateStringIn}/leads-${dateStringIn}.json`);
+  var listOfPosts = scrappedData.filter((data) => {
+    var exists = leadsData.find((lead) => {
+      return lead.title == data.title;
+    });
+    return !exists;
+  });
+
+  console.log(scrappedData.length, listOfPosts.length);
+
+  fs.mkdir(`${category}/${dateString}`, { recursive: true }, (err) => {
+    if (err)
+      console.log(err.message, `${category}/${dateString}`);
+  });
+  fs.writeFileSync(`./${category}/${dateString}/result-${dateString}.json`, JSON.stringify(listOfPosts));
+
+}
+
 // ========================= end of watch data scrapping ===================================
 (async () => {
   scrapeData();
-//   const browser = await puppeteer.launch({
-//     ...config
-// });
-// const page = await browser.newPage();
+  // listFailed("2020-6-28");
+  //   const browser = await puppeteer.launch({
+  //     ...config
+  // });
+  // const page = await browser.newPage();
 })();
